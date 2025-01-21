@@ -3,15 +3,16 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const authRoutes = require('./routes/authRoutes');
 const bodyParser = require('body-parser');
+const cors = require('cors');
 
 
 // โหลดตัวแปรจากไฟล์ .env
 dotenv.config();
 const app = express();
 app.use(bodyParser.json());
+app.use(cors());
 
-// Middleware
-app.use(express.json()); // ใช้ express.json() แทน body-parser
+
 
 // เชื่อมต่อ MongoDB
 mongoose.connect(process.env.DB_URI, {
@@ -24,6 +25,7 @@ mongoose.connect(process.env.DB_URI, {
 // Routes
 app.use('/api/auth', authRoutes);
 
+app.use('/auth', authRoutes);
 
 
 const PORT = process.env.PORT || 5000;

@@ -4,26 +4,18 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
-// สร้าง transporter สำหรับส่งอีเมล
-const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 465,
-    secure: true ,
-    auth: {
-        user: "zkaka185@gmail.com",
-        pass: "womo jflu djzo zbvy",
-    },
-});
+
 
 // ฟังก์ชันสำหรับส่งอีเมลยืนยัน
 async function sendVerificationEmail(email, username, token) {
     try {
         // สร้างข้อความ HTML สำหรับอีเมลยืนยัน
         const htmlMessage = `
-            <h1>Hello ${username},</h1>
-            <p>Please verify your email address by clicking the link below:</p>
-            <a href="http://localhost:5000/verify?token=${token}">Verify Email</a>
-        `;
+    <h1>Hello ${username},</h1>
+    <p>Please verify your email address by clicking the link below:</p>
+    <a href="http://localhost:5000/auth/verify?token=${token}">Verify Email</a>
+`;
+
 
         // ส่งอีเมล
         const info = await transporter.sendMail({

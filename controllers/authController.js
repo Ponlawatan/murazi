@@ -1,12 +1,9 @@
+const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const User = require('../models/User');
 const emailController = require('../controllers/emailController');
 
-// ฟังก์ชันสร้าง token แบบสุ่ม
-function generateToken() {
-    return crypto.randomBytes(16).toString('hex'); // สร้าง token ความยาว 32 ตัวอักษร
-}
 
 // Function สำหรับตรวจสอบรูปแบบรหัสผ่าน
 function validatePassword(password) {
@@ -16,7 +13,7 @@ function validatePassword(password) {
 
 // Register Function
 exports.register = async (req, res) => {
-    const { username, email, password } = req.body;
+    const { username, lastname, email, password } = req.body; // เพิ่ม lastname
 
     try {
         // ตรวจสอบว่ามีผู้ใช้ที่ลงทะเบียนด้วยอีเมลนี้แล้วหรือไม่
@@ -34,6 +31,7 @@ exports.register = async (req, res) => {
         // บันทึกข้อมูลผู้ใช้
         const newUser = new User({
             username,
+            lastname, // เพิ่ม lastname
             email,
             password: hashedPassword,
             verificationToken,
@@ -56,26 +54,31 @@ exports.register = async (req, res) => {
     }
 };
 
+
 // ฟังก์ชันสำหรับยืนยันอีเมล
-exports.verifyEmail = async (req, res) => {
-    const { token } = req.query;  // รับ token จาก query string
+exports.sendVerificationEmail = async (req, res) => {
+    const { token } = req.query;
 
     try {
-        // ค้นหาผู้ใช้ที่มี token ตรงกับในฐานข้อมูล
+        console.log('Token received:', token);
+
+        // ค้นหาผู้ใช้
         const user = await User.findOne({ verificationToken: token });
         if (!user) {
             return res.status(400).json({ msg: "Invalid or expired verification token." });
         }
+        console.log('User found:', user);
 
-        // เปลี่ยนสถานะ isVerified เป็น true
+        // เปลี่ยนสถานะ
         user.isVerified = true;
-        user.verificationToken = null;  // ลบ token เพื่อไม่ให้ใช้งานได้อีก
-        await user.save();  // บันทึกการเปลี่ยนแปลงในฐานข้อมูล
+        user.verificationToken = null;
 
-        // ส่งข้อความยืนยันว่าอีเมลถูกยืนยันแล้ว
+        await user.save();
+        console.log('User updated:', user);
+
         res.status(200).json({ msg: "Email verified successfully." });
     } catch (err) {
-        console.error(err);
+        console.error('Error verifying email:', err);
         res.status(500).json({ msg: "Server error" });
     }
 };
@@ -97,15 +100,53 @@ exports.login = async (req, res) => {
             return res.status(400).json({ msg: "Please verify your email before logging in." });
         }
 
+        // ตรวจสอบรหัสผ่าน
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             return res.status(400).json({ msg: "Invalid credentials" });
         }
 
-        // ส่ง token (หรือจัดการ session ตามระบบ)
-        res.json({ msg: "Logged in successfully" });
+        // สร้าง JWT Token
+        const token = jwt.sign(
+            { id: user._id, email: user.email }, // ข้อมูล payload
+            process.env.JWT_SECRET,             // รหัสลับใน .env
+            { expiresIn: '1h' }                 // อายุการใช้งานของ token
+        );
+
+        // บันทึก Token ลงใน MongoDB
+        user.tokens.push({ token }); // เพิ่ม token ลงในฟิลด์ tokens
+        await user.save();           // บันทึกการเปลี่ยนแปลงลงในฐานข้อมูล
+
+        // ส่ง response พร้อม token
+        res.json({
+            msg: "Logged in successfully",
+            token,
+        });
     } catch (err) {
         console.error(err);
         res.status(500).json({ msg: "Server error" });
     }
 };
+
+
+// Logout
+exports.logout = async (req, res) => {
+    const { email, token } = req.body; // ต้องส่ง token มาใน body
+
+    try {
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(400).json({ msg: "User not found" });
+        }
+
+        // ลบ Token ที่ระบุออกจากอาร์เรย์ tokens
+        user.tokens = user.tokens.filter((item) => item.token !== token);
+        await user.save();
+
+        res.json({ msg: "Logged out successfully" });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ msg: "Server error" });
+    }
+};
+

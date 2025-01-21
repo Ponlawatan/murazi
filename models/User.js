@@ -1,37 +1,18 @@
 const mongoose = require('mongoose');
 
-// สร้าง Schema สำหรับผู้ใช้
 const userSchema = new mongoose.Schema({
-    username: {
-        type: String,
-        required: true,
-    },
-    email: {
-        type: String,
-        required: true,
-        unique: true,
-    },
-    password: {
-        type: String,
-        required: true,
-    },
-    verificationToken: {
-        type: String,
-        required: true,
-    },
-    isVerified: {
-        type: Boolean,
-        default: false,  // ค่าพื้นฐานเป็น false
-    },
+    username: { type: String, required: true, unique: false },
+    lastname: { type: String, required: true, unique: false },
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    isVerified: { type: Boolean, default: false }, // ตรวจสอบ default
+    verificationToken: { type: String, required: false }, // ตรวจสอบ type
     tokens: [
         {
-            token: {
-                type: String,
-                required: true,
-            },
-        },
-    ],
+            token: { type: String, required: true },
+            createdAt: { type: Date, default: Date.now }
+        }
+    ]
 });
 
-// สร้าง Model จาก Schema
 module.exports = mongoose.model('User', userSchema);
