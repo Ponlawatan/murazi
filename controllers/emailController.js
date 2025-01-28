@@ -1,10 +1,19 @@
 const nodemailer = require('nodemailer');
 const dotenv = require('dotenv');
 
-
+// โหลดค่าจากไฟล์ .env
 dotenv.config();
 
-
+// สร้าง transporter
+const transporter = nodemailer.createTransport({
+            host: "smtp.gmail.com",
+            port: 465,
+            secure: true ,
+            auth: {
+                user: "zkaka185@gmail.com",
+                pass: "womo jflu djzo zbvy",
+            },
+        });
 
 // ฟังก์ชันสำหรับส่งอีเมลยืนยัน
 async function sendVerificationEmail(email, username, token) {

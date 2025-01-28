@@ -1,18 +1,16 @@
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
-    username: { type: String, required: true, unique: false },
-    lastname: { type: String, required: true, unique: false },
-    email: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
-    isVerified: { type: Boolean, default: false }, // ตรวจสอบ default
-    verificationToken: { type: String, required: false }, // ตรวจสอบ type
-    tokens: [
-        {
-            token: { type: String, required: true },
-            createdAt: { type: Date, default: Date.now }
-        }
-    ]
-});
+    username: { type: String, required: true, unique: false }, // ไม่เป็น unique
+    lastname: { type: String, required: true, unique: false }, // ไม่เป็น unique
+    email: { type: String, required: true, unique: true }, // ต้อง unique
+    password: { type: String, required: true }, // เก็บรหัสผ่าน (ควรเข้ารหัสก่อนเก็บ)
+    isVerified: { type: Boolean, default: false }, // ระบุสถานะการยืนยัน
+    verificationToken: { type: String, required: false }, // เก็บ Token สำหรับยืนยันอีเมล
+    tokens: [{ token: String }], // เก็บ JWT Token หลายค่า (ในกรณีที่ผู้ใช้ล็อกอินในหลายอุปกรณ์)
+    resetPasswordToken: { type: String, required: false }, // Token สำหรับรีเซ็ตรหัสผ่าน
+    resetPasswordExpires: { type: Date, required: false }, // วันหมดอายุของ token
+}, { timestamps: true }); // เปิดใช้งาน timestamps เพื่อบันทึก createdAt, updatedAt
 
 module.exports = mongoose.model('User', userSchema);
+

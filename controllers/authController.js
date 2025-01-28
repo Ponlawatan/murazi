@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const User = require('../models/User');
 const emailController = require('../controllers/emailController');
+const { sendResetPasswordEmail } = require('../controllers/resetPasswordEmailController');
 
 
 // Function สำหรับตรวจสอบรูปแบบรหัสผ่าน
@@ -150,3 +151,78 @@ exports.logout = async (req, res) => {
     }
 };
 
+
+// ฟังก์ชัน forgotPassword สำหรับขอรีเซ็ตรหัสผ่าน
+exports.forgotPassword = async (req, res) => {
+    const { email } = req.body;
+
+    try {
+        // ตรวจสอบว่าผู้ใช้มีอีเมลนี้อยู่ในระบบหรือไม่
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(400).json({ msg: "User with that email does not exist." });
+        }
+
+        // สร้าง token สำหรับการรีเซ็ตรหัสผ่าน
+        const resetToken = crypto.randomBytes(20).toString('hex');
+        
+        // ตั้งค่าช่วงเวลาหมดอายุของ token (1 ชั่วโมง)
+        const resetPasswordExpires = Date.now() + 3600000;
+
+        // อัพเดต token และเวลาหมดอายุในฐานข้อมูล
+        user.resetPasswordToken = resetToken;
+        user.resetPasswordExpires = resetPasswordExpires;
+        await user.save();
+
+        // ส่งอีเมลรีเซ็ตรหัสผ่าน
+        const emailResponse = await sendResetPasswordEmail(email, resetToken);
+
+        if (emailResponse.success) {
+            res.status(200).json({ msg: "Password reset email sent successfully." });
+        } else {
+            res.status(500).json({ msg: emailResponse.message });
+        }
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ msg: "Server error" });
+    }
+};
+
+
+exports.resetPassword = async (req, res) => {
+    const { token, newPassword, confirmPassword } = req.body;
+
+    // ตรวจสอบว่า newPassword และ confirmPassword ตรงกันหรือไม่
+    if (newPassword !== confirmPassword) {
+        return res.status(400).json({ message: 'Passwords do not match' });
+    }
+
+    try {
+        // ค้นหาผู้ใช้จาก token
+        const user = await User.findOne({
+            resetPasswordToken: token,
+            resetPasswordExpires: { $gt: Date.now() }
+        });
+
+        if (!user) {
+            return res.status(400).json({ message: 'Invalid or expired token' });
+        }
+
+        // เข้ารหัสรหัสผ่านใหม่
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        // อัพเดตข้อมูลรหัสผ่านใหม่และลบ token
+        user.password = hashedPassword;
+        user.resetPasswordToken = undefined;
+        user.resetPasswordExpires = undefined;
+        await user.save();
+
+        // ส่ง response กลับไปที่ client ว่าการรีเซ็ตรหัสผ่านสำเร็จ
+        res.status(200).json({ message: 'Password has been reset successfully' });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+  
