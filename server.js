@@ -1,48 +1,54 @@
+// Import dependencies
 const express = require('express');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
-const authRoutes = require('./routes/authRoutes'); // เส้นทางสำหรับ auth (login, register)
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const ejs = require('ejs');
-const { resetPassword } = require('./controllers/authController'); // ฟังก์ชัน resetPassword
 
-// โหลดตัวแปรจากไฟล์ .env
+// Import routes and controllers
+const authRoutes = require('./routes/authRoutes');
+const { resetPassword } = require('./controllers/authController');
+
+// Load environment variables from .env file
 dotenv.config();
-const app = express();
-app.use(bodyParser.json());
-app.use(cors());
-app.set('view engine', 'ejs'); // ใช้ EJS ในการเรนเดอร์ HTML
 
-// เชื่อมต่อ MongoDB
+// Initialize the Express app
+const app = express();
+
+// Middleware setup
+app.use(bodyParser.json());  // To parse JSON bodies
+app.use(bodyParser.urlencoded({ extended: true }));  // To parse URL-encoded bodies (from forms)
+app.use(cors());  // Enable Cross-Origin Resource Sharing
+app.set('view engine', 'ejs');
+app.set('views', './views');
+
+// MongoDB connection
 mongoose.connect(process.env.DB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
 })
     .then(() => console.log("Connected to MongoDB"))
-    .catch((err) => console.log(err));
+    .catch((err) => console.log('MongoDB connection error:', err));
 
-// Routes
-app.use('/api/auth', authRoutes); // สำหรับ API auth เช่น login, register
-app.use('/auth', authRoutes); // สำหรับการเรียกใช้งาน auth ในรูปแบบอื่นๆ
+// Routes for authentication
+app.use('/api/auth', authRoutes); // API endpoints for login, register
+app.use('/auth', authRoutes);     // Alternate route for auth
 
-// Route สำหรับแสดงฟอร์ม reset password
+// Route to display the reset password form
 app.get('/reset-password', (req, res) => {
     const { token } = req.query;
-  
-    // ตรวจสอบว่า token มาจากลิงก์ในอีเมล
+
     if (!token) {
-      return res.status(400).send('Invalid or expired token');
+        return res.status(400).send('Invalid or expired token');
     }
-  
-    // ส่ง token ไปยังหน้า HTML
+
     res.render('reset-password', { token });
 });
 
-// Route สำหรับการรีเซ็ตรหัสผ่านหลังจากกรอกฟอร์ม
-app.post('/reset-password', resetPassword); // ตั้งให้ POST route ใช้ฟังก์ชัน resetPassword ที่คุณได้สร้างไว้ใน Controller
+// Route to handle password reset request
+app.post('/reset-password', resetPassword);  // Use resetPassword function from controller
 
-// ตั้งค่าพอร์ตที่ต้องการให้เซิร์ฟเวอร์รัน
+// Start the server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);

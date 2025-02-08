@@ -109,47 +109,80 @@ exports.login = async (req, res) => {
 
         // สร้าง JWT Token
         const token = jwt.sign(
-            { id: user._id, email: user.email }, // ข้อมูล payload
-            process.env.JWT_SECRET,             // รหัสลับใน .env
-            { expiresIn: '1h' }                 // อายุการใช้งานของ token
+            { id: user._id, email: user.email },
+            process.env.JWT_SECRET,
+            { expiresIn: '1h' }
         );
 
         // บันทึก Token ลงใน MongoDB
-        user.tokens.push({ token }); // เพิ่ม token ลงในฟิลด์ tokens
-        await user.save();           // บันทึกการเปลี่ยนแปลงลงในฐานข้อมูล
+        user.tokens.push({ token });
+        await user.save();
 
-        // ส่ง response พร้อม token
+        // ส่ง Token กลับไปใน Cookie (สำหรับใช้ใน browser)
+        res.cookie('token', token, {
+            httpOnly: true,
+            secure: true,     // ต้องใช้ HTTPS
+            sameSite: 'None', // รองรับ Cross-Origin (Flutter Web)
+            maxAge: 3600000   // หมดอายุใน 1 ชั่วโมง
+        });
+
+        // ส่ง Token กลับไปใน JSON Response (สำหรับใช้ใน frontend)
         res.json({
             msg: "Logged in successfully",
-            token,
+            token // ส่ง Token กลับไปใน JSON เพื่อให้ frontend อ่านได้
         });
+
     } catch (err) {
         console.error(err);
         res.status(500).json({ msg: "Server error" });
     }
-};
+}
 
 
-// Logout
+// Logout Function
 exports.logout = async (req, res) => {
-    const { email, token } = req.body; // ต้องส่ง token มาใน body
-
     try {
-        const user = await User.findOne({ email });
+        // ดึง Token จาก header หรือ body (ไม่ใช่จาก cookies)
+        const token = req.headers['authorization']?.split(' ')[1] || req.body.token;
+
+        if (!token) {
+            return res.status(401).json({ msg: "No token provided" });
+        }
+
+        // ตรวจสอบ Token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+        // ค้นหาผู้ใช้จากฐานข้อมูล
+        const user = await User.findById(decoded.id);
+
         if (!user) {
             return res.status(400).json({ msg: "User not found" });
         }
 
-        // ลบ Token ที่ระบุออกจากอาร์เรย์ tokens
-        user.tokens = user.tokens.filter((item) => item.token !== token);
+        // ค้นหา token ที่ตรงกับ token ที่ถูกส่งมาจาก client
+        const tokenIndex = user.tokens.findIndex((item) => item.token === token);
+
+        if (tokenIndex === -1) {
+            return res.status(400).json({ msg: "Token not found in user's tokens" });
+        }
+
+        // ลบ token ออกจากอาร์เรย์ของ user
+        user.tokens.splice(tokenIndex, 1);
+
+        // บันทึกการเปลี่ยนแปลงในฐานข้อมูล
         await user.save();
 
+        // ส่งข้อความตอบกลับว่า logout สำเร็จ
         res.json({ msg: "Logged out successfully" });
     } catch (err) {
         console.error(err);
         res.status(500).json({ msg: "Server error" });
     }
 };
+
+
+
+
 
 
 // ฟังก์ชัน forgotPassword สำหรับขอรีเซ็ตรหัสผ่าน
@@ -225,4 +258,67 @@ exports.resetPassword = async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
-  
+
+exports.getProfile = async (req, res) => {
+    try {
+        const token = req.cookies.token; // ดึง Token จาก Cookie
+
+        if (!token) {
+            return res.status(401).json({ message: 'ไม่ได้รับอนุญาต' });
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const user = await User.findById(decoded.id).select('-password');
+
+        if (!user) {
+            return res.status(404).json({ message: 'ไม่พบผู้ใช้' });
+        }
+
+        res.json(user);
+    } catch (error) {
+        res.status(401).json({ message: 'Token ไม่ถูกต้อง' });
+    }
+};
+
+// Refresh Token Function
+exports.refreshToken = async (req, res) => {
+    const { refreshToken } = req.body;
+
+    try {
+        // ตรวจสอบว่า refreshToken ส่งมาหรือไม่
+        if (!refreshToken) {
+            return res.status(400).json({ msg: "Refresh token is required" });
+        }
+
+        // ตรวจสอบว่า refreshToken ยังมีอายุอยู่หรือไม่
+        const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+        if (!decoded) {
+            return res.status(401).json({ msg: "Invalid or expired refresh token" });
+        }
+
+        // สร้าง JWT token ใหม่
+        const newToken = jwt.sign(
+            { id: decoded.id, email: decoded.email },
+            process.env.JWT_SECRET,
+            { expiresIn: '1h' }
+        );
+
+        // ส่ง Token ใหม่ไปใน JSON Response และ Cookie
+        res.cookie('token', newToken, {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'None',
+            maxAge: 3600000 // หมดอายุใน 1 ชั่วโมง
+        });
+
+        // ส่ง Token ใหม่ใน JSON Response
+        res.json({
+            msg: "Token refreshed successfully",
+            token: newToken // ส่ง Token ใหม่กลับไป
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ msg: "Server error" });
+    }
+}
